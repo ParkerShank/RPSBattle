@@ -1,0 +1,8 @@
+Adding a text file for my initial push to create branch.
+
+Database Name: RPS_DB
+Tables:
+
+Users - UserID, Username, Password, Wins, Losses, Ties, HandMostPlayed
+
+Games - GameID, Player1, Player2, Winner, Ties, WinningHand
