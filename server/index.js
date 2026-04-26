@@ -104,20 +104,61 @@ app.listen(3000, () => {
 
 */
 
+
+//PARKER CODE BELOW
+// WebSocket server for real-time communication
+//generate random id for player
+function generateId() {
+  return Math.random().toString(36).substr(2, 9);
+}
+
+const players = new Map(); // Map of WebSocket -> player info
 wss.on('connection', (ws) => {
   console.log('New client connected');
-
-
-  ws.on('message', (data) => {console.log('Received message:', data.toString())
-  ws.send('Hello back')
+  //player info: { id, username, wins, losses }
+  players.set(ws,{
+    id: generateId(),
+    username: null,
+    wins: 0,
+    losses: 0
   })
+  console.log('Client connected, total players:', players.size);
+  // get player info for this connection
+  const player = players.get(ws);
+  console.log(player.id)
 
+  // Listen for messages from the client
+  ws.on('message', (raw) => {
+    // Expecting messages in format: { type: 'REGISTER', name: 'player1' }
+    const data = JSON.parse(raw);
+    console.log('Received message:', data);
+    // Handle different message types
+    switch (data.type) {
+      // For example, handle player registration
+      case 'REGISTER':{
+        // Update player info with username
+        const player = players.get(ws);
+        player.username = data.name;
+        console.log('Player registered with username:', player.username);
+        // Send back confirmation to client
+        ws.send(JSON.stringify({ type: 'REGISTERED', id: player.id, username: player.username }));
+        break;
+      }
+    }
+    // Log all players for debugging
+    for (const account of players.values()) {
+      console.log('Player:', account.id, 'Username:', account.username);
+    }
+  })
+  // Handle client disconnect
   ws.on('close', () => {
-    console.log('Client disconnected');
+    // Remove player from map
+    players.delete(ws);
+    console.log('Client disconnected, total players:', players.size, 'removing player with id:', player.id);
+    
   })
-
 
 })
-
+// Start the server
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
