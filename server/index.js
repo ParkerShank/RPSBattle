@@ -3,7 +3,7 @@ const http = require('http');
 const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const cors = require('cors');
-const { WebSocketServer } = require('ws');
+const { WebSocketServer, WebSocket } = require('ws');
 
 const app = express();
 const server = http.createServer(app); // Create HTTP server for WebSocket
@@ -97,12 +97,12 @@ app.post('/api/login', (req, res) => {
     }
   );
 });
-
+/*
 app.listen(3000, () => {
   console.log('Server running at http://localhost:3000');
 });
 
-
+*/
 
 wss.on('connection', (ws) => {
   console.log('New client connected');
@@ -119,4 +119,5 @@ wss.on('connection', (ws) => {
 
 })
 
-server.listen(3001)
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
