@@ -1,9 +1,13 @@
 const express = require('express');
+const http = require('http');
 const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const cors = require('cors');
+const { WebSocketServer } = require('ws');
 
 const app = express();
+const server = http.createServer(app); // Create HTTP server for WebSocket
+const wss = new WebSocketServer({server}); // WebSocket server for real-time communication
 
 app.use(cors());
 app.use(express.json());
@@ -97,3 +101,22 @@ app.post('/api/login', (req, res) => {
 app.listen(3000, () => {
   console.log('Server running at http://localhost:3000');
 });
+
+
+
+wss.on('connection', (ws) => {
+  console.log('New client connected');
+
+
+  ws.on('message', (data) => {console.log('Received message:', data.toString())
+  ws.send('Hello back')
+  })
+
+  ws.on('close', () => {
+    console.log('Client disconnected');
+  })
+
+
+})
+
+server.listen(3001)
