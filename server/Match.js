@@ -1,7 +1,7 @@
 // Match.js
 // Created: 4/24/2026
 // Last Edited: 4/25/2026
-// Author: John Wesley Thompson
+// Authors: John Wesley Thompson and Parker Shanklin
 
 // This file contains the Match class, which handles a single RPS game logic and data.
 
@@ -11,12 +11,18 @@ const Play = Object.freeze({
     SCISSORS: "Scissors"
 });
 
+//generate random id for player class instances
+function generateId() {
+    return Math.random().toString(36).substr(2, 9);
+}
+
 class Player {
     constructor(){
-        this.socket = null;
-        this.id = null;
-        this.name = null;
-        this.play = null;
+        // this.socket = null; // currently, the socket connection is stored outside of the Player class
+        this.id = generateId();
+        this.username = null;
+        this.wins = 0;
+        this.losses = 0;
     }
 }
 

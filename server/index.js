@@ -4,6 +4,7 @@ const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const cors = require('cors');
 const { WebSocketServer, WebSocket } = require('ws');
+import { Player } from "Match.js";
 
 const app = express();
 const server = http.createServer(app); // Create HTTP server for WebSocket
@@ -107,21 +108,19 @@ app.listen(3000, () => {
 
 //PARKER CODE BELOW
 // WebSocket server for real-time communication
-//generate random id for player
-function generateId() {
-  return Math.random().toString(36).substr(2, 9);
-}
 
 const players = new Map(); // Map of WebSocket -> player info
 wss.on('connection', (ws) => {
   console.log('New client connected');
   //player info: { id, username, wins, losses }
-  players.set(ws,{
-    id: generateId(),
-    username: null,
-    wins: 0,
-    losses: 0
-  })
+//   players.set(ws,{
+//     id: generateId(),
+//     username: null,
+//     wins: 0,
+//     losses: 0
+//   })
+  players.set(ws, new Player());
+
   console.log('Client connected, total players:', players.size);
   // get player info for this connection
   const player = players.get(ws);
