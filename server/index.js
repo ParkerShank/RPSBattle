@@ -15,8 +15,8 @@ app.use(express.json());
 const db = mysql.createConnection({
   host: 'localhost',
   user: 'root',
-  password: '',
-  database: 'login_demo'
+  password: '', //depending on who is running the SQL instance, we will need to make this that user's MySQL password
+  database: 'RPS_DB' //db name changed from 'login_demo', database name is set to 'RPS_DB' in rpsdata.sql
 });
 
 db.connect((err) => {
