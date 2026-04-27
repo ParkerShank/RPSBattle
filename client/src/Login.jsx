@@ -78,6 +78,17 @@ function Login() {
       <p>
         Don't have an account? <Link to="/register">Register here</Link>
       </p>
+      <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+        <Link to="/testing">
+          <button type="button">Testing</button>
+        </Link>
+        <Link to="/register">
+          <button type="button">Register</button>
+        </Link>
+        <Link to="/dashboard">
+          <button type="button">Dashboard</button>
+        </Link>
+      </div>
     </div>
   );
 }

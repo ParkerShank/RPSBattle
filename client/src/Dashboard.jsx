@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 function Dashboard() {
   const [user, setUser] = useState(null);
@@ -33,6 +34,17 @@ function Dashboard() {
       ) : (
         <p>Loading...</p>
       )}
+      <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+        <Link to="/testing">
+          <button type="button">Testing</button>
+        </Link>
+        <Link to="/register">
+          <button type="button">Register</button>
+        </Link>
+        <Link to="/dashboard">
+          <button type="button">Dashboard</button>
+        </Link>
+      </div>
     </div>
   );
 }
