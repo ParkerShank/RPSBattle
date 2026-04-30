@@ -5,6 +5,10 @@ const GameSocketContext = createContext(null)
 function useGameSocketProviderValue() {
     //connected state to track if WebSocket is connected
   const [connected, setConnected] = useState(false)
+  const [authenticated, setAuthenticated] = useState(false)
+  const [authToken, setAuthToken] = useState(() => {
+    return localStorage.getItem('authToken') || null
+  })
   // useRef to hold the WebSocket instance across renders without causing re-renders
   const ws = useRef(null)
     // useEffect to establish WebSocket connection when component mounts
@@ -15,30 +19,59 @@ function useGameSocketProviderValue() {
     ws.current = socket
     // set up event handlers for WebSocket
     socket.onopen = () => {
-      console.log('Connected!')
+      console.log('[WS_CLIENT] WebSocket opened')
       setConnected(true)
+      // Send auth token immediately upon connection
+      if (authToken) {
+        console.log('[WS_CLIENT] Sending AUTH message with token:', authToken.substring(0, 8) + '...')
+        socket.send(JSON.stringify({ type: 'AUTH', token: authToken }))
+      } else {
+        console.log('[WS_CLIENT] No auth token available')
+      }
     }
     socket.onclose = () => {
-      console.log('Disconnected!')
+      console.log('[WS_CLIENT] WebSocket closed')
       setConnected(false)
+      setAuthenticated(false)
     }
     // log any messages received from server (for testing)
     socket.onmessage = (event) => {
-      console.log('Server said:', event.data)
+      const data = JSON.parse(event.data)
+      console.log('[WS_CLIENT] Server message:', data.type, data)
+      
+      if (data.type === 'AUTH_SUCCESS') {
+        console.log('[WS_CLIENT] Authentication successful!')
+        setAuthenticated(true)
+      } else if (data.type === 'AUTH_ERROR') {
+        console.error('[WS_CLIENT] Authentication failed:', data.message)
+        setAuthenticated(false)
+      } else if (data.type === 'AUTH_REQUIRED') {
+        console.log('[WS_CLIENT] Server requesting authentication')
+        setAuthenticated(false)
+      }
     }
-
+    socket.onerror = (event) => {
+      console.error('[WS_CLIENT] WebSocket error:', event)
+    }
 
     // cleanup: close socket if component unmounts
     return () => socket.close()
-  }, [])  // empty array = run once on mount, never again
-  // function to send a message to the server, only if connected
+  }, [authToken])  // re-establish connection if auth token changes
+  // function to send a message to the server, only if connected and authenticated
   const send = (payload) => {
+    if (!authenticated) {
+      console.warn('[WS_CLIENT] Cannot send - not authenticated')
+      return
+    }
     if (ws.current?.readyState === WebSocket.OPEN) {
+      console.log('[WS_CLIENT] Sending:', payload.type)
       ws.current.send(JSON.stringify(payload))
+    } else {
+      console.warn('[WS_CLIENT] WebSocket not open')
     }
   }
   // return the connection status and send function as the context value
-  return { connected, send }
+  return { connected, authenticated, send, authToken, setAuthToken }
 }
 // Context provider component to wrap the app and provide WebSocket functionality
 export function GameSocketProvider({ children }) {

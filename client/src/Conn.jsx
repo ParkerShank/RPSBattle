@@ -6,19 +6,32 @@ import { useState } from 'react'
 function Conn() {
     // state to hold the name input value
     const [name, setName] = useState('')
-    const { connected, send } = useGameSocket()
+    const { connected, authenticated, send } = useGameSocket()
     // function to send a message to the server when button is clicked
     function sendMessage() {
-        if (!connected) return
+        if (!authenticated) {
+            console.log('[CONN] Cannot send - not authenticated')
+            return
+        }
+        console.log('[CONN] Sending message:', name)
         send({ type: 'REGISTER', name })
+    }
+    function joinQueue() {
+        if (!authenticated) {
+            console.log('[CONN] Cannot join queue - not authenticated')
+            return
+        }
+        send({ type: 'JOIN_QUEUE' })
     }
     // render the UI with connection status, input field, and buttons to navigate to other pages
     return (
         <div>
             <h1>WebSocket Test</h1>
-            <p>{connected ? 'Connected' : 'Connecting...'}</p>
+            <p>Connection: {connected ? 'Connected ✓' : 'Connecting...'}</p>
+            <p>Authentication: {authenticated ? 'Authenticated ✓' : 'Not authenticated'}</p>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" />
-            <button onClick={sendMessage} disabled={!connected}>Send Name</button> {/* disable button if not connected */}
+            <button onClick={sendMessage} disabled={!authenticated}>Send Name</button> {/* disable button if not authenticated */}
+            <button onClick={joinQueue} disabled={!authenticated}>Join Queue</button>
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
               <Link to="/">
                 <button type="button">Login</button>

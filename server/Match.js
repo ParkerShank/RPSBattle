@@ -23,18 +23,23 @@ class Player {
         this.username = null;
         this.wins = 0;
         this.losses = 0;
+        this.hmp = 0; //Hands most played, possible to show to opponent before match starts. This is just for fun, not sure if we will actually use it.
+        this.lobbyID = null; // the lobby the player is currently in, if any
     }
 }
 
 class Match {
     constructor(player1, player2){
+        this.id = generateId();
         this.player1 = player1;
         this.player2 = player2;
         this.winner = null;
-        this.winning_play = null;
-        this.losing_play = null;
+        this.round = 1;
+        this.maxRounds = 3; // best of 3   
+        this.choices = {};
+        this.scores = {};
     }
-
+    
     async begin(){
         // signal to clients that the match has started
         // - show the player who they're facing
@@ -97,4 +102,4 @@ function awaitPlay(socket){
     });
 }
 
-export { Match, Player };
+module.exports = { Match, Player };

@@ -1,0 +1,10 @@
+# Ignore local environment files
+server/.env
+
+# Node dependencies
+node_modules
+
+# OS and editor temporary files
+.DS_Store
+.vscode/
+.idea/

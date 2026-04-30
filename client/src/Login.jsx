@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useGameSocket } from './hooks/useGameSocket';
 
 function Login() {
   const [formData, setFormData] = useState({
@@ -9,6 +10,7 @@ function Login() {
 
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
+  const { setAuthToken } = useGameSocket();
 
   const handleChange = (e) => {
     setFormData({
@@ -29,13 +31,18 @@ function Login() {
       });
 
       const data = await response.json();
+      console.log('[LOGIN_RESPONSE]', data);
       setMessage(data.message);
 
-      if (response.ok && data.user) {
+      if (response.ok && data.user && data.token) {
+        console.log('[LOGIN] Saving token to localStorage');
         localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('authToken', data.token);
+        setAuthToken(data.token);
         navigate('/dashboard');
       }
     } catch (error) {
+      console.error('[LOGIN] Error:', error);
       setMessage('Error connecting to server.', error);
     }
   };
