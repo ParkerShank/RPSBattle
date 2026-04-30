@@ -16,7 +16,7 @@ const db = mysql.createConnection({
   host: 'localhost',
   user: 'root',
   password: '',
-  database: 'login_demo'
+  database: 'RPS_PROJ'
 });
 
 db.connect((err) => {
@@ -64,7 +64,7 @@ app.post('/api/login', (req, res) => {
   }
 
   db.query(
-    'SELECT id, username, password FROM users WHERE username = ?',
+    'SELECT username, password FROM users WHERE username = ?',
     [username],
     async (err, results) => {
       if (err) {
@@ -87,13 +87,141 @@ app.post('/api/login', (req, res) => {
         res.json({
           message: 'Login successful!',
           user: {
-            id: user.id,
             username: user.username
           }
         });
       } catch (error) {
         res.status(500).json({ message: error.message });
       }
+    }
+  );
+});
+
+app.post('/api/update_stats', (req, res) => {
+  const {winner, loser} = req.body;
+
+  db.query(
+    'UPDATE users SET wins = wins + 1 WHERE username = ?',
+    [winner],
+    (err) => {
+      if (err) {
+        return res.status(500).json({message: err.message})
+      }
+
+      db.query(
+        'UPDATE users SET losses = losses + 1 WHERE username = ?',
+        [loser],
+        (err) => {
+          if (err) {
+            return res.status(500).json({message: err.message})
+          }
+
+          res.json({message: 'Stats updated!'});
+        }
+      );
+    }
+  );
+});
+
+app.post('/api/game_start', (req, res) => {
+  db.query(
+    'INSERT INTO games (winner, loser) VALUES (NULL, NULL)',
+    (err, result) => {
+      if (err) {
+        return res.status(500).json({message: err.message})
+      }
+
+      res.json({message: 'Game created!', match_id: result.insertId});
+    }
+  );
+});
+
+app.post('/api/game_update', (req, res) => {
+  const { winner, loser, match_id } = req.body;
+
+  db.query(
+    'UPDATE games SET winner = ?, loser = ? WHERE match_id = ?',
+    [winner, loser, match_id],
+    (err, result) => {
+      if (err) {
+        return res.status(500).json({message: err.message})
+      }
+
+      res.json({message: 'Game updated!'});
+    }
+  );
+});
+
+app.post('/api/round_insert', (req, res) => {
+  const {match_id, round_win, round_lose, round_number, win_hand, lose_hand} = req.body;
+
+  db.query(
+    'INSERT INTO rounds (match_id, round_win, round_lose, round_number, win_hand, lose_hand) VALUES (?, ?, ?, ?, ?, ?)',
+    [match_id, round_win, round_lose, round_number, win_hand, lose_hand],
+    (err) => {
+      if (err) {
+        return res.status(500).json({message: err.message})
+      }
+
+      res.json({message: 'Round inserted!'});
+    }
+  );
+});
+
+app.get('/api/leaderboard', (req,res) => {
+  db.query(
+    'SELECT username, wins FROM users ORDER BY wins DESC;',
+    (err, results) => {
+      if (err) {
+        return res.status(500).json({ message: err.message})
+      }
+
+      res.json(results);
+    }
+  );
+});
+
+app.get('/api/history', (req, res) => {
+  db.query(
+    'SELECT * FROM games',
+    (err, results) => {
+      if (err) {
+        return res.status(500).json({message: err.message})
+      }
+
+      res.json(results);
+    }
+  );
+});
+
+app.get('/api/history/match/:match_id', (req,res) => {
+  const { match_id } = req.params
+
+  db.query(
+    'SELECT g.match_id, g.winner, g.loser, r.round_number, r.round_win, r.round_lose, r.win_hand, r.lose_hand FROM rounds as r JOIN games as g ON r.match_id = g.match_id WHERE r.match_id = ?',
+    [match_id],
+    (err, results) => {
+      if (err) {
+        return res.status(500).json({message: err.message})
+      }
+
+      res.json(results);
+    }
+  );
+});
+
+app.get('/api/history/:username', (req,res) => {
+  const { username } = req.params
+
+  db.query(
+    'SELECT * FROM games WHERE winner = ? OR loser = ?',
+    [username, username],
+    (err, results) => {
+      if (err) {
+        return res.status(500).json({message: err.message})
+      }
+
+      res.json(results);
     }
   );
 });
