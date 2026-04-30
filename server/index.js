@@ -1,3 +1,4 @@
+// This is the main server file for the Rock-Paper-Scissors game. It handles user registration, login, matchmaking, and real-time communication using WebSockets. The server uses Express for handling HTTP requests and MySQL for storing user data. WebSocket connections are used for real-time gameplay interactions between matched players.
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -230,7 +231,7 @@ app.listen(3000, () => {
 */
 
 
-//PARKER CODE BELOW
+
 // WebSocket server for real-time communication
 
 // once data is fetched from DB we will use a token to verify the user and then attach their player data to their websocket connection. This way we can easily access their info when they send messages and we know who they are without having to send their token every time. We will also need to handle the case where a user tries to connect without logging in first, in which case we can just close the connection or send an error message.
