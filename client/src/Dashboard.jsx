@@ -38,12 +38,7 @@ function Dashboard() {
         <Link to="/testing">
           <button type="button">Testing</button>
         </Link>
-        <Link to="/register">
-          <button type="button">Register</button>
-        </Link>
-        <Link to="/dashboard">
-          <button type="button">Dashboard</button>
-        </Link>
+        <Link to="/"><button type="button">Login</button></Link>
       </div>
     </div>
   );

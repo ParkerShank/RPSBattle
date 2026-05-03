@@ -1,21 +1,17 @@
-import React from 'react'
-import { Link } from 'react-router-dom'
+import React, { useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useGameSocket } from './hooks/useGameSocket'
-import { useState } from 'react'
 // This component is just for testing the WebSocket connection and send function
 function Conn() {
-    // state to hold the name input value
-    const [name, setName] = useState('')
-    const { connected, authenticated, send } = useGameSocket()
+    const navigate = useNavigate()
+    const { connected, authenticated, currentMatch, send } = useGameSocket()
     // function to send a message to the server when button is clicked
-    function sendMessage() {
-        if (!authenticated) {
-            console.log('[CONN] Cannot send - not authenticated')
-            return
+    useEffect(() => {
+        if (currentMatch?.matchId) {
+            navigate(`/match/${currentMatch.matchId}`)
         }
-        console.log('[CONN] Sending message:', name)
-        send({ type: 'REGISTER', name })
-    }
+    }, [currentMatch, navigate])
+
     function joinQueue() {
         if (!authenticated) {
             console.log('[CONN] Cannot join queue - not authenticated')
@@ -29,16 +25,8 @@ function Conn() {
             <h1>WebSocket Test</h1>
             <p>Connection: {connected ? 'Connected ✓' : 'Connecting...'}</p>
             <p>Authentication: {authenticated ? 'Authenticated ✓' : 'Not authenticated'}</p>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" />
-            <button onClick={sendMessage} disabled={!authenticated}>Send Name</button> {/* disable button if not authenticated */}
             <button onClick={joinQueue} disabled={!authenticated}>Join Queue</button>
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-              <Link to="/">
-                <button type="button">Login</button>
-              </Link>
-              <Link to="/register">
-                <button type="button">Register</button>
-              </Link>
               <Link to="/dashboard">
                 <button type="button">Dashboard</button>
               </Link>

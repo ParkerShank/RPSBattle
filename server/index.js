@@ -18,9 +18,31 @@ const players = new Map(); // Map of WebSocket -> player info
 const sessions = new Map(); // Map auth token -> Player instance
 const queue = []; // Queue of waiting players for matchmaking
 const lobbies = new Map(); // Map of lobby ID -> Match instance
+const VALID_PLAYS = new Set(['Rock', 'Paper', 'Scissors']);
 
+function safeSend(ws, payload) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.warn('[WS] safeSend skipped: socket not open');
+    return false;
+  }
 
-// Function to find the best match for a player in the queue based on win/loss ratio 
+  try {
+    ws.send(JSON.stringify(payload));
+    return true;
+  } catch (err) {
+    console.error('[WS] Failed to send message:', err.message);
+    return false;
+  }
+}
+
+function sendError(ws, message) {
+  safeSend(ws, { type: 'ERROR', message });
+}
+
+function isValidPlay(play) {
+  return typeof play === 'string' && VALID_PLAYS.has(play);
+}
+
 function findBestMatch(ws) {
   const player = players.get(ws);
   if (!player) {
@@ -69,29 +91,35 @@ function createLobby(ws1, ws2) {
     return;
   }
 
-  const match = new Match(player1, player2);
-  console.log('[LOBBY] Created match between', match.player1.username, 'and', match.player2.username);
+  player1.socket = ws1;
+  player2.socket = ws2;
 
-  match.scores = {[player1.id]: 0, [player2.id]: 0};
+  const match = new Match(player1, player2);
+  match.sockets = { [player1.id]: ws1, [player2.id]: ws2 };
+  match.choices = {};
+  match.scores = { [player1.id]: 0, [player2.id]: 0 };
+  console.log('[LOBBY] Created match between', match.player1.username, 'and', match.player2.username);
   lobbies.set(match.id, match);
 
-  ws1.send(JSON.stringify({
+  safeSend(ws1, {
     type: 'MATCH_FOUND',
     matchId: match.id,
     round: match.round,
     maxRounds: match.maxRounds,
-    opponent: { name: player2.username, hmp: player2.hand_most_played },
+    playerId: player1.id,
+    opponent: { id: player2.id, name: player2.username, hmp: player2.hand_most_played },
     scores: match.scores,
-  }));
+  });
 
-  ws2.send(JSON.stringify({
+  safeSend(ws2, {
     type: 'MATCH_FOUND',
     matchId: match.id,
     round: match.round,
     maxRounds: match.maxRounds,
-    opponent: { name: player1.username, hmp: player1.hand_most_played },
+    playerId: player2.id,
+    opponent: { id: player1.id, name: player1.username, hmp: player1.hand_most_played },
     scores: match.scores,
-  }));
+  });
 
   player1.lobbyID = match.id;
   player2.lobbyID = match.id;
@@ -119,7 +147,41 @@ db.connect((err) => {
     return;
   }
   console.log('Connected to MySQL');
+  ensureUserSchema();
 });
+
+function ensureUserSchema() {
+  const requiredColumns = [
+    { name: 'rocks', definition: 'INT UNSIGNED NOT NULL DEFAULT 0' },
+    { name: 'papers', definition: 'INT UNSIGNED NOT NULL DEFAULT 0' },
+    { name: 'scissors', definition: 'INT UNSIGNED NOT NULL DEFAULT 0' },
+    { name: 'hand_most_played', definition: "ENUM('Rock', 'Paper', 'Scissors') NULL" },
+  ];
+
+  requiredColumns.forEach((col) => {
+    db.query('SHOW COLUMNS FROM users LIKE ?', [col.name], (err, results) => {
+      if (err) {
+        if (err.code === 'ER_NO_SUCH_TABLE') {
+          console.warn('[DB] users table does not exist yet. It should be created by schema setup.');
+        } else {
+          console.error('[DB] Schema check failed for', col.name, err.message);
+        }
+        return;
+      }
+
+      if (results.length === 0) {
+        console.log('[DB] Adding missing column:', col.name);
+        db.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.definition}`, (alterErr) => {
+          if (alterErr) {
+            console.error('[DB] Failed to add column', col.name + ':', alterErr.message);
+          } else {
+            console.log('[DB] Added column', col.name);
+          }
+        });
+      }
+    });
+  });
+}
 
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
@@ -493,9 +555,79 @@ wss.on('connection', (ws) => {
         break;
       }
       case 'PLAY': {
-        player.lastPlay = data.play;
-        console.log('[WS] Player', player.username, 'played:', player.lastPlay);
-        ws.send(JSON.stringify({ type: 'PLAY_RECEIVED', play: player.lastPlay }));
+        const play = data.play;
+
+        if (!play) {
+          sendError(ws, 'Missing play selection.');
+          break;
+        }
+
+        if (!isValidPlay(play)) {
+          sendError(ws, 'Invalid play selection. Choose Rock, Paper, or Scissors.');
+          break;
+        }
+
+        if (!player.lobbyID) {
+          sendError(ws, 'You are not currently in a match. Join the queue first.');
+          break;
+        }
+
+        const match = lobbies.get(player.lobbyID);
+        if (!match) {
+          sendError(ws, 'Match not found or has already ended.');
+          break;
+        }
+
+        if (!match.sockets || !match.sockets[player.id]) {
+          sendError(ws, 'Unable to associate your socket with the current match.');
+          break;
+        }
+
+        if (match.choices[player.id]) {
+          sendError(ws, 'You have already submitted a play for this round.');
+          break;
+        }
+
+        match.choices[player.id] = play;
+        console.log('[WS] Player', player.username, 'played:', play);
+        safeSend(ws, { type: 'PLAY_RECEIVED', play });
+
+        const choice1 = match.choices[match.player1.id];
+        const choice2 = match.choices[match.player2.id];
+
+        if (choice1 && choice2) {
+          const result = match.evaluate(choice1, choice2);
+          if (result.error) {
+            sendError(ws, result.message || 'Match evaluation failed.');
+            break;
+          }
+
+          if (match.winner) {
+            match.scores[match.winner.id] = (match.scores[match.winner.id] || 0) + 1;
+          }
+
+          const roundResult = {
+            type: 'ROUND_RESULT',
+            matchId: match.id,
+            round: match.round,
+            choices: {
+              [match.player1.id]: choice1,
+              [match.player2.id]: choice2,
+            },
+            winnerId: match.winner ? match.winner.id : null,
+            winningPlay: match.winning_play || null,
+            tie: result.tie === true,
+            scores: match.scores,
+          };
+
+          safeSend(match.sockets[match.player1.id], roundResult);
+          safeSend(match.sockets[match.player2.id], roundResult);
+
+          match.choices = {};
+          match.round += 1;
+        } else {
+          safeSend(ws, { type: 'WAITING_FOR_OPPONENT', message: 'Waiting for the opponent to play.' });
+        }
         break;
       }
       case 'JOIN_QUEUE': {
@@ -555,8 +687,8 @@ wss.on('connection', (ws) => {
       if (player.lobbyID) {
         const lobby = lobbies.get(player.lobbyID);
         if (lobby) {
-          const opponentWs = lobby.player1 === ws ? lobby.player2.socket : lobby.player1.socket;
-          opponentWs.send(JSON.stringify({ type: 'OPPONENT_DISCONNECTED' }));
+          const opponentWs = lobby.player1.socket === ws ? lobby.player2.socket : lobby.player1.socket;
+          opponentWs?.send(JSON.stringify({ type: 'OPPONENT_DISCONNECTED' }));
           // Clean up lobby and reset opponent's lobbyId
           const opponent = players.get(opponentWs);
           if (opponent) opponent.lobbyID = null;

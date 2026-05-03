@@ -11,6 +11,10 @@ const Play = Object.freeze({
     SCISSORS: "Scissors"
 });
 
+function isValidPlay(play) {
+    return typeof play === 'string' && Object.values(Play).includes(play);
+}
+
 //generate random id for player class instances
 function generateId() {
     return Math.random().toString(36).substr(2, 9);
@@ -56,22 +60,31 @@ class Match {
 
 
     evaluate(player1_play, player2_play){
+        if (!player1_play || !player2_play) {
+            return { error: true, message: 'Both player plays must be provided.' };
+        }
+
+        if (!isValidPlay(player1_play) || !isValidPlay(player2_play)) {
+            return { error: true, message: 'One or both plays are invalid.' };
+        }
 
         if (player1_play === player2_play){
-            this.begin();
-            return;
+            this.winner = null;
+            this.winning_play = null;
+            return { tie: true };
+        }
 
-        } else if ((player1_play === Play.ROCK && player2_play === Play.SCISSORS) ||
+        if ((player1_play === Play.ROCK && player2_play === Play.SCISSORS) ||
             (player1_play === Play.SCISSORS && player2_play === Play.PAPER) ||
             (player1_play === Play.PAPER && player2_play === Play.ROCK)){
-
-            this.winner = this.player1
+            this.winner = this.player1;
             this.winning_play = player1_play;
-
         } else {
             this.winner = this.player2;
             this.winning_play = player2_play;
         }
+
+        return { tie: false, winner: this.winner };
     }
 
 

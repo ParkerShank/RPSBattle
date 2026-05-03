@@ -9,6 +9,10 @@ function useGameSocketProviderValue() {
   const [authToken, setAuthToken] = useState(() => {
     return localStorage.getItem('authToken') || null
   })
+  const [currentUser, setCurrentUser] = useState(null)
+  const [currentMatch, setCurrentMatch] = useState(null)
+  const [matchStatus, setMatchStatus] = useState(null)
+  const [roundResult, setRoundResult] = useState(null)
   // useRef to hold the WebSocket instance across renders without causing re-renders
   const ws = useRef(null)
     // useEffect to establish WebSocket connection when component mounts
@@ -42,12 +46,29 @@ function useGameSocketProviderValue() {
       if (data.type === 'AUTH_SUCCESS') {
         console.log('[WS_CLIENT] Authentication successful!')
         setAuthenticated(true)
+        setCurrentUser(data.user)
       } else if (data.type === 'AUTH_ERROR') {
         console.error('[WS_CLIENT] Authentication failed:', data.message)
         setAuthenticated(false)
       } else if (data.type === 'AUTH_REQUIRED') {
         console.log('[WS_CLIENT] Server requesting authentication')
         setAuthenticated(false)
+      } else if (data.type === 'MATCH_FOUND') {
+        console.log('[WS_CLIENT] Match found:', data.matchId)
+        setCurrentMatch(data)
+        setMatchStatus('Match found! Choose your play.')
+        setRoundResult(null)
+      } else if (data.type === 'PLAY_RECEIVED') {
+        setMatchStatus('Play received. Waiting for the opponent.')
+      } else if (data.type === 'WAITING_FOR_OPPONENT') {
+        setMatchStatus(data.message || 'Waiting for the opponent to play.')
+      } else if (data.type === 'ROUND_RESULT') {
+        setMatchStatus(data.tie ? 'Round tied.' : 'Round complete.')
+        setRoundResult(data)
+        setCurrentMatch((prevMatch) => {
+          if (!prevMatch || prevMatch.matchId !== data.matchId) return prevMatch
+          return { ...prevMatch, round: data.round, scores: data.scores }
+        })
       }
     }
     socket.onerror = (event) => {
@@ -71,7 +92,7 @@ function useGameSocketProviderValue() {
     }
   }
   // return the connection status and send function as the context value
-  return { connected, authenticated, send, authToken, setAuthToken }
+  return { connected, authenticated, currentUser, currentMatch, matchStatus, roundResult, send, authToken, setAuthToken }
 }
 // Context provider component to wrap the app and provide WebSocket functionality
 export function GameSocketProvider({ children }) {
