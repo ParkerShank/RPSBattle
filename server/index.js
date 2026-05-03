@@ -160,7 +160,7 @@ app.post('/api/login', (req, res) => {
   }
 
   db.query(
-    'SELECT id, username, password, wins, losses, ties, hand_most_played FROM users WHERE username = ?',
+    'SELECT id, username, password, wins, losses, ties, hand_most_played, rocks, papers, scissors FROM users WHERE username = ?',
     [username],
     async (err, results) => {
       if (err) {
@@ -191,6 +191,9 @@ app.post('/api/login', (req, res) => {
         player.losses = user.losses ?? 0;
         player.ties = user.ties ?? 0;
         player.hand_most_played = user.hand_most_played ?? null;
+        player.rocks = user.rocks ?? 0;
+        player.papers = user.papers ?? 0;
+        player.scissors = user.scissors ?? 0;
 
         const token = createSession(player);
         console.log('[LOGIN] Session created. Token:', token.substring(0, 8) + '...');
@@ -213,6 +216,9 @@ app.post('/api/login', (req, res) => {
             losses: player.losses,
             ties: player.ties,
             hand_most_played: player.hand_most_played,
+            rocks: player.rocks,
+            papers: player.papers,
+            scissors: player.scissors,
           },
         });
 
@@ -223,6 +229,196 @@ app.post('/api/login', (req, res) => {
     }
   );
 });
+app.post('/api/update_stats', (req, res) => {
+  const { winner_id, loser_id, is_tie } = req.body;
+
+  if (!winner_id || !loser_id) {
+    return res.status(400).json({ message: 'winner_id and loser_id are required.' });
+  }
+
+  if (is_tie) {
+    db.query(
+      'UPDATE users SET ties = ties + 1 WHERE id = ? OR id = ?',
+      [winner_id, loser_id],
+      (err) => {
+        if (err) return res.status(500).json({ message: err.message });
+        res.json({ message: 'Tie recorded!' });
+      }
+    );
+  } else {
+    db.query(
+      'UPDATE users SET wins = wins + 1 WHERE id = ?',
+      [winner_id],
+      (err) => {
+        if (err) return res.status(500).json({ message: err.message });
+
+        db.query(
+          'UPDATE users SET losses = losses + 1 WHERE id = ?',
+          [loser_id],
+          (err) => {
+            if (err) return res.status(500).json({ message: err.message });
+            res.json({ message: 'Stats updated!' });
+          }
+        );
+      }
+    );
+  }
+});
+
+app.post('/api/game_start', (req, res) => {
+  const { player1_id, player2_id } = req.body;
+
+  db.query(
+    'INSERT INTO games (player1_id, player2_id) VALUES (?, ?)',
+    [player1_id, player2_id],
+    (err, result) => {
+      if (err) return res.status(500).json({ message: err.message });
+      res.json({ message: 'Game created!', game_id: result.insertId });
+    }
+  );
+});
+
+app.post('/api/game_update', (req, res) => {
+  const { winner_id, game_id, winning_hand } = req.body;
+
+  db.query(
+    'UPDATE games SET winner_id = ?, winning_hand = ?, finished_at = NOW() WHERE id = ?',
+    [winner_id, winning_hand, game_id],
+    (err) => {
+      if (err) return res.status(500).json({ message: err.message });
+      res.json({ message: 'Game updated!' });
+    }
+  );
+});
+
+app.post('/api/round_insert', (req, res) => {
+  const { game_id, round_number, player1_play, player2_play, winner_id } = req.body;
+
+  db.query(
+    'INSERT INTO game_rounds (game_id, round_number, player1_play, player2_play, winner_id) VALUES (?, ?, ?, ?, ?)',
+    [game_id, round_number, player1_play, player2_play, winner_id],
+    (err) => {
+      if (err) return res.status(500).json({ message: err.message });
+
+      db.query(
+        'SELECT player1_id, player2_id FROM games WHERE id = ?',
+        [game_id],
+        (err, results) => {
+          if (err) return res.status(500).json({ message: err.message });
+
+          if (results.length === 0) return res.status(404).json({ message: 'Game not found.' });
+          const { player1_id, player2_id } = results[0];
+
+          db.query(
+            'UPDATE users SET rocks = rocks + CASE WHEN ? = "Rock" THEN 1 ELSE 0 END, papers = papers + CASE WHEN ? = "Paper" THEN 1 ELSE 0 END, scissors = scissors + CASE WHEN ? = "Scissors" THEN 1 ELSE 0 END WHERE id = ?',
+            [player1_play, player1_play, player1_play, player1_id],
+            (err) => {
+              if (err) return res.status(500).json({ message: err.message });
+
+              db.query(
+                'UPDATE users SET hand_most_played = CASE WHEN rocks >= papers AND rocks >= scissors THEN "Rock" WHEN papers >= scissors THEN "Paper" ELSE "Scissors" END WHERE id = ?',
+                [player1_id],
+                (err) => {
+                  if (err) return res.status(500).json({ message: err.message });
+
+                  db.query(
+                    'UPDATE users SET rocks = rocks + CASE WHEN ? = "Rock" THEN 1 ELSE 0 END, papers = papers + CASE WHEN ? = "Paper" THEN 1 ELSE 0 END, scissors = scissors + CASE WHEN ? = "Scissors" THEN 1 ELSE 0 END WHERE id = ?',
+                    [player2_play, player2_play, player2_play, player2_id],
+                    (err) => {
+                      if (err) return res.status(500).json({ message: err.message });
+
+                      db.query(
+                        'UPDATE users SET hand_most_played = CASE WHEN rocks >= papers AND rocks >= scissors THEN "Rock" WHEN papers >= scissors THEN "Paper" ELSE "Scissors" END WHERE id = ?',
+                        [player2_id],
+                        (err) => {
+                          if (err) return res.status(500).json({ message: err.message });
+
+                          if (!winner_id) {
+                            db.query(
+                              'UPDATE games SET ties = ties + 1 WHERE id = ?',
+                              [game_id],
+                              (err) => {
+                                if (err) return res.status(500).json({ message: err.message });
+                                res.json({ message: 'Round inserted!' });
+                              }
+                            );
+                          } else {
+                            res.json({ message: 'Round inserted!' });
+                          }
+                        }
+                      );
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+});
+
+app.get('/api/leaderboard', (req, res) => {
+  db.query(
+    'SELECT id, username, wins, losses, ties FROM users ORDER BY wins DESC',
+    (err, results) => {
+      if (err) return res.status(500).json({ message: err.message });
+      res.json(results);
+    }
+  );
+});
+
+app.get('/api/user/:username', (req, res) => {
+  const { username } = req.params;
+
+  db.query(
+    'SELECT id, username, wins, losses, ties, hand_most_played, rocks, papers, scissors FROM users WHERE username = ?',
+    [username],
+    (err, results) => {
+      if (err) return res.status(500).json({ message: err.message });
+      if (results.length === 0) return res.status(404).json({ message: 'User not found.' });
+      res.json(results[0]);
+    }
+  );
+});
+
+app.get('/api/history', (req, res) => {
+  db.query(
+    'SELECT * FROM games',
+    (err, results) => {
+      if (err) return res.status(500).json({ message: err.message });
+      res.json(results);
+    }
+  );
+});
+
+app.get('/api/history/match/:game_id', (req, res) => {
+  const { game_id } = req.params;
+
+  db.query(
+    'SELECT g.id, g.player1_id, g.player2_id, g.winner_id, r.round_number, r.player1_play, r.player2_play, r.winner_id as round_winner_id FROM games as g JOIN game_rounds as r ON r.game_id = g.id WHERE g.id = ?',
+    [game_id],
+    (err, results) => {
+      if (err) return res.status(500).json({ message: err.message });
+      res.json(results);
+    }
+  );
+});
+
+app.get('/api/history/:username', (req, res) => {
+  const { username } = req.params;
+
+  db.query(
+    'SELECT g.* FROM games g JOIN users u1 ON g.player1_id = u1.id JOIN users u2 ON g.player2_id = u2.id WHERE u1.username = ? OR u2.username = ?',
+    [username, username],
+    (err, results) => {
+      if (err) return res.status(500).json({ message: err.message });
+      res.json(results);
+    }
+  );
+});
+
 /*
 app.listen(3000, () => {
   console.log('Server running at http://localhost:3000');
