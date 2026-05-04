@@ -91,17 +91,15 @@ function createLobby(ws1, ws2) {
     return;
   }
 
-  player1.socket = ws1;
-  player2.socket = ws2;
+  player1.ws = ws1;
+  player2.ws = ws2;
 
   const match = new Match(player1, player2);
-  match.sockets = { [player1.id]: ws1, [player2.id]: ws2 };
-  match.choices = {};
-  match.scores = { [player1.id]: 0, [player2.id]: 0 };
+//   match.sockets = { [player1.id]: ws1, [player2.id]: ws2 };i
   console.log('[LOBBY] Created match between', match.player1.username, 'and', match.player2.username);
   lobbies.set(match.id, match);
 
-  safeSend(ws1, {
+  safeSend(player1.ws, {
     type: 'MATCH_FOUND',
     matchId: match.id,
     round: match.round,
@@ -111,7 +109,7 @@ function createLobby(ws1, ws2) {
     scores: match.scores,
   });
 
-  safeSend(ws2, {
+  safeSend(player2.ws, {
     type: 'MATCH_FOUND',
     matchId: match.id,
     round: match.round,
@@ -123,8 +121,43 @@ function createLobby(ws1, ws2) {
 
   player1.lobbyID = match.id;
   player2.lobbyID = match.id;
+  
+  startRound(match);
 }
 
+function startRound(match){
+    if (match.round >= match.maxRounds){
+        match.broadcast({
+            type: 'MATCH_END',
+            scores: match.scores
+        });
+        lobbies.delete(match.id);
+        return;
+    }
+
+    match.startRound(({ play1, play2 }) => {
+        // fallback plays if missing
+        const final1 = play1 ?? "Paper";
+        const final2 = play2 ?? "Rock";
+
+        match.evaluate(final1, final2);
+        match.choices = {};
+
+        match.broadcast({
+            type: 'ROUND_RESULT',
+            matchId: match.id,
+            round: match.round,
+            choices: {
+                [match.player1.id]: final1,
+                [match.player2.id]: final2
+            },
+            scores: match.scores,
+            timeout: true
+        });
+
+        startRound(match);
+    });
+}
 
 //session are to only use websockets after login instead of websockets on connection. Easier to get all their data then attach it before making the new player
 function createSession(player) {
@@ -578,56 +611,43 @@ wss.on('connection', (ws) => {
           break;
         }
 
-        if (!match.sockets || !match.sockets[player.id]) {
-          sendError(ws, 'Unable to associate your socket with the current match.');
-          break;
+        const result = match.submitPlay(player, play);
+
+        if (result.error){
+            sendError(ws, result.message);
+            return;
         }
 
-        if (match.choices[player.id]) {
-          sendError(ws, 'You have already submitted a play for this round.');
-          break;
+        safeSend(ws, {type: 'PLAY_RECEIVED', play});
+
+        if (!result.complete) {
+            safeSend(ws, { type: 'WAITING_FOR_OPPONENT' });
+            return;
         }
 
-        match.choices[player.id] = play;
-        console.log('[WS] Player', player.username, 'played:', play);
-        safeSend(ws, { type: 'PLAY_RECEIVED', play });
+        match.broadcast({
+          type: 'ROUND_RESULT',
+          matchId: match.id,
+          round: match.round,
+          choices: {
+          [match.player1.id]: result.play1,
+          [match.player2.id]: result.play2
+          },
+          scores: result.scores
+        });
 
-        const choice1 = match.choices[match.player1.id];
-        const choice2 = match.choices[match.player2.id];
-
-        if (choice1 && choice2) {
-          const result = match.evaluate(choice1, choice2);
-          if (result.error) {
-            sendError(ws, result.message || 'Match evaluation failed.');
-            break;
-          }
-
-          if (match.winner) {
-            match.scores[match.winner.id] = (match.scores[match.winner.id] || 0) + 1;
-          }
-
-          const roundResult = {
-            type: 'ROUND_RESULT',
-            matchId: match.id,
-            round: match.round,
-            choices: {
-              [match.player1.id]: choice1,
-              [match.player2.id]: choice2,
-            },
-            winnerId: match.winner ? match.winner.id : null,
-            winningPlay: match.winning_play || null,
-            tie: result.tie === true,
-            scores: match.scores,
-          };
-
-          safeSend(match.sockets[match.player1.id], roundResult);
-          safeSend(match.sockets[match.player2.id], roundResult);
-
-          match.choices = {};
-          match.round += 1;
-        } else {
-          safeSend(ws, { type: 'WAITING_FOR_OPPONENT', message: 'Waiting for the opponent to play.' });
+        if (match.round >= match.maxRounds) {
+            match.broadcast({
+                type: 'MATCH_END',
+                scores: match.scores
+            });
+        
+            lobbies.delete(match.id);
+            return;
         }
+
+        startRound(match);
+
         break;
       }
       case 'JOIN_QUEUE': {
@@ -687,7 +707,7 @@ wss.on('connection', (ws) => {
       if (player.lobbyID) {
         const lobby = lobbies.get(player.lobbyID);
         if (lobby) {
-          const opponentWs = lobby.player1.socket === ws ? lobby.player2.socket : lobby.player1.socket;
+          const opponentWs = lobby.player1.ws === ws ? lobby.player2.ws : lobby.player1.ws;
           opponentWs?.send(JSON.stringify({ type: 'OPPONENT_DISCONNECTED' }));
           // Clean up lobby and reset opponent's lobbyId
           const opponent = players.get(opponentWs);

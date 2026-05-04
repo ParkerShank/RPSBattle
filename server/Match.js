@@ -21,8 +21,8 @@ function generateId() {
 }
 
 class Player {
-    constructor(){
-        // this.socket = null; // currently, the socket connection is stored outside of the Player class
+    constructor(socket){
+        this.ws = socket;
         this.id = generateId();
         this.username = null;
         this.wins = 0;
@@ -38,27 +38,81 @@ class Match {
         this.player1 = player1;
         this.player2 = player2;
         this.winner = null;
-        this.round = 1;
+        this.round = 0;
         this.maxRounds = 3; // best of 3   
+        this.lastChoices = {
+            [player1.id]: null,
+            [player2.id]: null
+        };
+        this.scores = {
+            [player1.id]: 0,
+            [player2.id]: 0
+        };
+        this.roundTimer = null;
+        this.roundTimeLimit = 3000; // 3 sec
+    }
+
+    startRound(onTimeout){
         this.choices = {};
-        this.scores = {};
+
+        this.roundTimer = setTimeout(() => {
+            const play1 = this.choices[this.player1.id];
+            const play2 = this.choices[this.player2.id];
+
+            onTimeout({
+                play1: play1 ?? null,
+                play2: play2 ?? null
+            });
+        }, this.roundTimeLimit);
     }
+
+    submitPlay(player, play){
+        if (!isValidPlay(play)){
+            return {error: true, message: "Invalid play."};
+        }
+
+        if (this.choices[player.id]){
+            return { error: true, message: 'Already played this round' };
+        }
+
+        this.choices[player.id] = play;
+
+        const play1 = this.choices[this.player1.id];
+        const play2 = this.choices[this.player2.id];
+
+        if (play1 && play2){
+            clearTimeout(this.roundTimer);
+
+            const result = this.evaluate(play1, play2);
+
+            this.choices = {};
+            this.round++;
+
+            return {
+                complete: true,
+                play1,
+                play2,
+                result,
+                scores: this.scores
+            };
+        }
+
+        return {complete: false};
+    }
+
+    broadcast(payload){
+        const msg = JSON.stringify(payload);
     
-    async begin(){
-        // signal to clients that the match has started
-        // - show the player who they're facing
-        //    - player1 needs to be sent player2's info and vice versa
-
-        const player1_play = await awaitPlay(this.player1.socket);
-        const player2_play = await awaitPlay(this.player2.socket);
-        // set a timer and prepare default play for players who havent selected
-        // - might need a separate classs for this because I hear making a timer is a pain in js.
-        // await both responses
-        // after timer ends, check player responses. If selected, evaluate, if not, set default.
-        this.evaluate(player1_play, player2_play);
+        if (this.player1.ws?.readyState === 1) {
+            this.player1.ws.send(msg);
+        }
+    
+        if (this.player2.ws?.readyState === 1) {
+            this.player2.ws.send(msg);
+        }
     }
 
-
+    // returns false if its a tie and true otherwise
     evaluate(player1_play, player2_play){
         if (!player1_play || !player2_play) {
             return { error: true, message: 'Both player plays must be provided.' };
@@ -69,22 +123,20 @@ class Match {
         }
 
         if (player1_play === player2_play){
-            this.winner = null;
-            this.winning_play = null;
-            return { tie: true };
+            return false;
         }
 
         if ((player1_play === Play.ROCK && player2_play === Play.SCISSORS) ||
             (player1_play === Play.SCISSORS && player2_play === Play.PAPER) ||
-            (player1_play === Play.PAPER && player2_play === Play.ROCK)){
-            this.winner = this.player1;
-            this.winning_play = player1_play;
+            (player1_play === Play.PAPER && player2_play === Play.ROCK))
+        {
+            this.scores[this.player1.id]++;
+
         } else {
-            this.winner = this.player2;
-            this.winning_play = player2_play;
+            this.scores[this.player2.id]++;
         }
 
-        return { tie: false, winner: this.winner };
+        return true;
     }
 
 
@@ -93,26 +145,6 @@ class Match {
     //     // send necessary match data to the database
     // }
 
-}
-
-
-// this function recieves a message with the following json structure
-// {
-//      "play": "Rock" (or "Paper" or "Scissors")
-// }
-function awaitPlay(socket){
-
-    return new Promise((resolve) => {
-        const handler = (data) => {
-            socket.off("message", handler);
-            const str = data.toString();
-            const json_obj = JSON.parse(str);
-            
-            resolve(json_obj.play);
-        };
-
-        socket.on("message", handler);
-    });
 }
 
 module.exports = { Match, Player };
