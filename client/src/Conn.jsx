@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useGameSocket } from './hooks/useGameSocket'
 // This component is just for testing the WebSocket connection and send function
@@ -21,17 +21,24 @@ function Conn() {
     }
     // render the UI with connection status, input field, and buttons to navigate to other pages
     return (
-        <div>
-            <h1>WebSocket Test</h1>
-            <p>Connection: {connected ? 'Connected ✓' : 'Connecting...'}</p>
-            <p>Authentication: {authenticated ? 'Authenticated ✓' : 'Not authenticated'}</p>
-            <button onClick={joinQueue} disabled={!authenticated}>Join Queue</button>
-            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-              <Link to="/dashboard">
-                <button type="button">Dashboard</button>
-              </Link>
-            </div>
-        </div>
+                <main className="page">
+                    <section className="panel center">
+                        <h1>Matchmaking Queue</h1>
+                        <p className="subtitle">Connect to the server and get paired with a nearby skill match.</p>
+
+                        <p className={connected ? 'status status-success' : 'status status-muted'}>
+                            Connection: {connected ? 'Connected' : 'Connecting...'}
+                        </p>
+                        <p className={authenticated ? 'status status-success' : 'status status-error'}>
+                            Authentication: {authenticated ? 'Authenticated' : 'Not authenticated'}
+                        </p>
+
+                        <div className="menu">
+                            {authenticated && <button className="btn btn-primary" onClick={joinQueue}>Join Queue</button>}
+                            {authenticated && <Link className="btn btn-secondary" to="/dashboard">Dashboard</Link>}
+                        </div>
+                    </section>
+                </main>
     )
 }
 

@@ -1,11 +1,13 @@
-import React, { useEffect } from 'react'
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom'
 import Register from './Register'
 import Login from './Login'
 import Dashboard from './Dashboard'
 import Conn from './Conn'
 import Match from './Match'
+import Header from './Header'
 import { GameSocketProvider, useGameSocket } from './hooks/useGameSocket'
+import './App.css'
 
 function MatchRedirector() {
   const { currentMatch } = useGameSocket()
@@ -25,6 +27,7 @@ function App() {
     // Wrap the app with GameSocketProvider to provide WebSocket functionality to all components
     <GameSocketProvider>
       <BrowserRouter>
+        <Header />
         <MatchRedirector />
         <Routes>
           <Route path="/" element={<Login />} />
