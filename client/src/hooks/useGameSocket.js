@@ -21,7 +21,7 @@ function useGameSocketProviderValue() {
     // useEffect to establish WebSocket connection when component mounts
   useEffect(() => {
     // create WebSocket connection to server
-    const socket = new WebSocket('ws://localhost:3001')
+    const socket = new WebSocket('ws://3.141.165.85:3000')
     // store socket in ref so we can use it in send function
     ws.current = socket
     // set up event handlers for WebSocket
