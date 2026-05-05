@@ -1,6 +1,6 @@
 // Match.js
 // Created: 4/24/2026
-// Last Edited: 4/25/2026
+// Last Edited: 5/4/2026
 // Authors: John Wesley Thompson and Parker Shanklin
 
 // This file contains the Match class, which handles a single RPS game logic and data.
@@ -39,6 +39,7 @@ class Match {
         this.player2 = player2;
         this.winner = null;
         this.round = 0;
+        this.inProgress = false;
         this.maxRounds = 3; // best of 3   
         this.lastChoices = {
             [player1.id]: null,
@@ -60,13 +61,15 @@ class Match {
             const play2 = this.choices[this.player2.id];
 
             onTimeout({
-                play1: play1 ?? null,
-                play2: play2 ?? null
+
+                play1: play1 ?? Play.ROCK,
+                play2: play2 ?? Play.PAPER
             });
         }, this.roundTimeLimit);
     }
 
     submitPlay(player, play){
+        console.log(this.round);
         if (!isValidPlay(play)){
             return {error: true, message: "Invalid play."};
         }
@@ -138,13 +141,6 @@ class Match {
 
         return true;
     }
-
-
-    // This should probably be in the file that will use this class. (not within this class)
-    // record(){
-    //     // send necessary match data to the database
-    // }
-
 }
 
 module.exports = { Match, Player };

@@ -7,8 +7,8 @@ function Conn() {
     const { connected, authenticated, currentMatch, send } = useGameSocket()
     // function to send a message to the server when button is clicked
     useEffect(() => {
-        if (currentMatch?.matchId) {
-            navigate(`/match/${currentMatch.matchId}`)
+        if (currentMatch?.id) {
+            navigate(`/match/${currentMatch.id}`)
         }
     }, [currentMatch, navigate])
 

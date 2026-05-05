@@ -95,40 +95,44 @@ function createLobby(ws1, ws2) {
   player2.ws = ws2;
 
   const match = new Match(player1, player2);
-//   match.sockets = { [player1.id]: ws1, [player2.id]: ws2 };i
   console.log('[LOBBY] Created match between', match.player1.username, 'and', match.player2.username);
+
+  match.inProgress = true;
   lobbies.set(match.id, match);
 
   safeSend(player1.ws, {
     type: 'MATCH_FOUND',
-    matchId: match.id,
-    round: match.round,
-    maxRounds: match.maxRounds,
+    match: match,
+    // matchId: match.id,
+    // round: match.round,
+    // maxRounds: match.maxRounds,
     playerId: player1.id,
     opponent: { id: player2.id, name: player2.username, hmp: player2.hand_most_played },
-    scores: match.scores,
+    // scores: match.scores,
   });
 
   safeSend(player2.ws, {
     type: 'MATCH_FOUND',
-    matchId: match.id,
-    round: match.round,
-    maxRounds: match.maxRounds,
+    match: match,
+    // matchId: match.id,
+    // round: match.round,
+    // maxRounds: match.maxRounds,
     playerId: player2.id,
     opponent: { id: player1.id, name: player1.username, hmp: player1.hand_most_played },
-    scores: match.scores,
+    // scores: match.scores,
   });
 
   player1.lobbyID = match.id;
   player2.lobbyID = match.id;
-  
+
   startRound(match);
 }
 
 function startRound(match){
     if (match.round >= match.maxRounds){
+        match.inProgress = false;
         match.broadcast({
-            type: 'MATCH_END',
+            type: 'MATCH_ENDED',
             scores: match.scores
         });
         lobbies.delete(match.id);
@@ -136,20 +140,18 @@ function startRound(match){
     }
 
     match.startRound(({ play1, play2 }) => {
-        // fallback plays if missing
-        const final1 = play1 ?? "Paper";
-        const final2 = play2 ?? "Rock";
 
-        match.evaluate(final1, final2);
+        match.evaluate(play1, play2);
         match.choices = {};
+        match.round++;
 
         match.broadcast({
             type: 'ROUND_RESULT',
             matchId: match.id,
             round: match.round,
             choices: {
-                [match.player1.id]: final1,
-                [match.player2.id]: final2
+                [match.player1.id]: play1,
+                [match.player2.id]: play2
             },
             scores: match.scores,
             timeout: true
@@ -324,6 +326,7 @@ app.post('/api/login', (req, res) => {
     }
   );
 });
+
 app.post('/api/update_stats', (req, res) => {
   const { winner_id, loser_id, is_tie } = req.body;
 
@@ -577,7 +580,7 @@ wss.on('connection', (ws) => {
     }
 
     const player = players.get(ws);
-    const ration = (player.wins + 1) / (player.losses + 1);
+    // const ration = (player.wins + 1) / (player.losses + 1);
     console.log('[WS] Message from', player.username, '- type:', data.type);
     // handle different message types (e.g., REGISTER, PLAY) and update player state or match state accordingly
     switch (data.type) {
@@ -612,6 +615,7 @@ wss.on('connection', (ws) => {
         }
 
         const result = match.submitPlay(player, play);
+        console.log(result);
 
         if (result.error){
             sendError(ws, result.message);
@@ -637,8 +641,9 @@ wss.on('connection', (ws) => {
         });
 
         if (match.round >= match.maxRounds) {
+            match.inProgress = false;
             match.broadcast({
-                type: 'MATCH_END',
+                type: 'MATCH_ENDED',
                 scores: match.scores
             });
         
@@ -674,6 +679,10 @@ wss.on('connection', (ws) => {
           indices.forEach(i => queue.splice(i, 1));
 
           createLobby(ws, opponentWs);
+
+          safeSend(ws, {type: 'MATCH_START'});
+          safeSend(opponentWs, {type: 'MATCH_START'});
+
         } else {
           ws.send(JSON.stringify({ type:'IN_QUEUE' }));
         }
@@ -684,7 +693,8 @@ wss.on('connection', (ws) => {
         if (index !== -1) {
           queue.splice(index, 1);
         }
-        ws.send(JSON.stringify({type:'LEFT_QUEUE'}));
+        // ws.send(JSON.stringify({type:'LEFT_QUEUE'}));
+        safeSend(ws, {type: 'MATCH_ENDED'});
         break;
       }
       default: {

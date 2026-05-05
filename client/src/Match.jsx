@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useGameSocket } from './hooks/useGameSocket'
 
@@ -7,6 +7,40 @@ function Match() {
   const { matchId } = useParams()
   const { authenticated, currentMatch, matchStatus, roundResult, send } = useGameSocket()
   const [selectedPlay, setSelectedPlay] = useState(null)
+
+  // -Timer Code-
+  const [timeLeft, setTimeLeft] = useState({seconds: 0, deciseconds: 0});
+  const timerDuration = 3000; // ms
+
+  useEffect(() => {
+    if (!currentMatch?.inProgress) {
+      setTimeLeft({seconds: 0, deciseconds: 0});
+      return;
+    }
+
+    setSelectedPlay(null);
+    setTimeLeft({seconds: Math.floor(timerDuration / 1000), deciseconds: 0});
+
+    const endTime = Date.now() + timerDuration;
+
+    const interval = setInterval(() => {
+        const remaining = endTime - Date.now();
+
+        if (remaining <= 0) {
+            setTimeLeft({seconds: 0, deciseconds: 0});
+            clearInterval(interval);
+            return;
+        }
+
+        const seconds = Math.floor(remaining / 1000);
+        const deciseconds = Math.floor((remaining % 1000) / 100);
+
+        setTimeLeft({seconds, deciseconds});
+    }, 100); // 0.1 sec
+
+    return () => clearInterval(interval);
+  }, [currentMatch?.inProgress, currentMatch?.round]);
+  // -Timer Code End-
 
   if (!authenticated) {
     return (
@@ -18,7 +52,7 @@ function Match() {
     )
   }
 
-  const match = currentMatch && `${currentMatch.matchId}` === matchId ? currentMatch : null
+  const match = currentMatch && `${currentMatch.id}` === matchId ? currentMatch : null
   const playerScore = match ? match.scores?.[match.playerId] ?? 0 : 0
   const opponentScore = match ? match.scores?.[match.opponent?.id] ?? 0 : 0
 
@@ -30,6 +64,9 @@ function Match() {
   return (
     <div>
       <h1>Match {matchId}</h1>
+      <div>
+        {`${timeLeft.seconds}:${timeLeft.deciseconds.toString().padStart(1, "0")}`}
+      </div>
       {match ? (
         <>
           <div style={{ marginBottom: '1rem' }}>

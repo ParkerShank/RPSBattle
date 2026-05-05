@@ -12,8 +12,8 @@ function MatchRedirector() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (currentMatch?.matchId) {
-      navigate(`/match/${currentMatch.matchId}`)
+    if (currentMatch?.id) {
+      navigate(`/match/${currentMatch.id}`)
     }
   }, [currentMatch, navigate])
 
