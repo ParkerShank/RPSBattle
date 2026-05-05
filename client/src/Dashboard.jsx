@@ -29,7 +29,7 @@ function Dashboard() {
 
   const fetchUserProfile = async (username) => {
     try {
-      const response = await fetch(`http://18.189.1.63:3001/api/user/${encodeURIComponent(username)}`);
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user/${encodeURIComponent(username)}`);
       if (response.ok) {
         const refreshedUser = await response.json();
         setUser(refreshedUser);
@@ -43,7 +43,7 @@ function Dashboard() {
   const fetchRecentGames = async (userId) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://18.189.1.63:3001/api/user/${userId}/recent-games`);
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user/${userId}/recent-games`);
       if (response.ok) {
         const games = await response.json();
         setRecentGames(games);

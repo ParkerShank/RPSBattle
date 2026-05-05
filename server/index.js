@@ -279,10 +279,10 @@ function createSession(player) {
 }
 
 const db = mysql.createConnection({
-  host: 'rpsbattle-db.cv646gg8wjqx.us-east-2.rds.amazonaws.com',
-  user: 'admin',
+  host: process.env.DB_HOST || 'rpsbattle-db.cv646gg8wjqx.us-east-2.rds.amazonaws.com',
+  user: process.env.DB_USER || 'admin',
   password: process.env.DB_PASSWORD,
-  database: 'RPS_DB'
+  database: process.env.DB_NAME || 'RPS_DB'
 });
 
 db.connect((err) => {
@@ -909,4 +909,5 @@ wss.on('connection', (ws) => {
 
 // Start the server
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const HOST = process.env.HOST || '0.0.0.0'; // Bind to all interfaces for AWS
+server.listen(PORT, HOST, () => console.log(`Server running on ${HOST}:${PORT}`));
