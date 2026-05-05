@@ -23,7 +23,7 @@ function Login() {
     e.preventDefault();
 
     try {
-      const response = await fetch('http://3.141.165.85:3000/api/login', { //, {
+      const response = await fetch('http://18.189.1.63:3001/api/login', { //, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
