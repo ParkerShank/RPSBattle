@@ -13,6 +13,7 @@ function useGameSocketProviderValue() {
   const [currentMatch, setCurrentMatch] = useState(null)
   const [matchStatus, setMatchStatus] = useState(null)
   const [roundResult, setRoundResult] = useState(null)
+  const [forceBack, setForceBack] = useState(false)
   // the following is used for setting the client-side timer
   const [matchInProgress, setMatchInProgress] = useState(false);
   // useRef to hold the WebSocket instance across renders without causing re-renders
@@ -60,6 +61,7 @@ function useGameSocketProviderValue() {
 
       } else if (data.type === 'MATCH_FOUND') {
         console.log('[WS_CLIENT] Match found:', data.match.id)
+        setForceBack(false)
         setCurrentMatch({
           ...data.match,
           matchId: data.match.id,
@@ -88,10 +90,29 @@ function useGameSocketProviderValue() {
           return { ...prevMatch, round: data.round, scores: data.scores }
         })
       } else if (data.type === 'MATCH_ENDED' || data.type === 'MATCH_END') {
-        setMatchStatus('Match ended.')
+        setForceBack(false)
+        setMatchStatus(data.resultMessage || 'Match ended.')
+        setRoundResult(null)
+        setCurrentMatch((prevMatch) => {
+          if (!prevMatch || prevMatch.id !== data.matchId) return prevMatch
+          return {
+            ...prevMatch,
+            inProgress: false,
+            scores: data.scores ?? prevMatch.scores,
+            winnerId: data.winnerId ?? prevMatch.winnerId,
+            resultMessage: data.resultMessage ?? prevMatch.resultMessage,
+            forceBackAfterMs: data.forceBackAfterMs
+          }
+        })
+      } else if (data.type === 'FORCE_BACK_TO_DASHBOARD') {
+        setMatchStatus('Match ended. Returning to dashboard...')
+        setForceBack(true)
+      }
+ else if (data.type === 'OPPONENT_DISCONNECTED') {
+        setMatchStatus('Opponent disconnected. Match ended.')
         setCurrentMatch((prevMatch) => {
           if (!prevMatch) return prevMatch
-          return { ...prevMatch, inProgress: false, scores: data.scores ?? prevMatch.scores }
+          return { ...prevMatch, inProgress: false }
         })
       }
     }
@@ -103,6 +124,13 @@ function useGameSocketProviderValue() {
     return () => socket.close()
   }, [authToken])  // re-establish connection if auth token changes
   // function to send a message to the server, only if connected and authenticated
+  const resetCurrentMatch = () => {
+    setCurrentMatch(null)
+    setMatchStatus(null)
+    setRoundResult(null)
+    setForceBack(false)
+  }
+
   const send = (payload) => {
     if (!authenticated) {
       console.warn('[WS_CLIENT] Cannot send - not authenticated')
@@ -124,9 +152,11 @@ function useGameSocketProviderValue() {
     matchInProgress,
     matchStatus,
     roundResult,
+    forceBack,
     send,
     authToken,
-    setAuthToken }
+    setAuthToken,
+    resetCurrentMatch }
 }
 // Context provider component to wrap the app and provide WebSocket functionality
 export function GameSocketProvider({ children }) {

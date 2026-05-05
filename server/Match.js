@@ -49,8 +49,10 @@ class Match {
             [player1.id]: 0,
             [player2.id]: 0
         };
+        this.roundHistory = [];
         this.roundTimer = null;
-        this.roundTimeLimit = 3000; // 3 sec
+        this.forceBackTimer = null;
+        this.roundTimeLimit = 5000; // 5 sec
     }
 
     startRound(onTimeout){
@@ -140,6 +142,74 @@ class Match {
         }
 
         return true;
+    }
+
+    getWinnerId(forceWinnerId = null){
+        if (forceWinnerId !== null) {
+            return forceWinnerId;
+        }
+
+        const player1Score = this.scores[this.player1.id] ?? 0;
+        const player2Score = this.scores[this.player2.id] ?? 0;
+
+        if (player1Score > player2Score) return this.player1.id;
+        if (player2Score > player1Score) return this.player2.id;
+        return null;
+    }
+
+    endMatch(options = {}){
+        const {
+            reason = 'completed',
+            forceWinnerId = null,
+            forceBackAfterMs = 30000,
+            onEnd = null
+        } = options;
+
+        if (!this.inProgress) {
+            return;
+        }
+
+        this.inProgress = false;
+        clearTimeout(this.roundTimer);
+        clearTimeout(this.forceBackTimer);
+        this.choices = {};
+
+        const winnerId = this.getWinnerId(forceWinnerId);
+        this.winner = winnerId;
+        this.player1.lobbyID = null;
+        this.player2.lobbyID = null;
+
+        const resultMessage = winnerId === null
+            ? 'Match ended in a tie.'
+            : winnerId === this.player1.id
+                ? `${this.player1.username || 'Player 1'} won the match.`
+                : `${this.player2.username || 'Player 2'} won the match.`;
+
+        this.broadcast({
+            type: 'MATCH_ENDED',
+            matchId: this.id,
+            scores: this.scores,
+            winnerId,
+            player1Id: this.player1.id,
+            player2Id: this.player2.id,
+            resultMessage,
+            round: this.round,
+            reason,
+            forceBackAfterMs
+        });
+
+        if (typeof onEnd === 'function') {
+            onEnd(this);
+        }
+
+        if (forceBackAfterMs > 0) {
+            this.forceBackTimer = setTimeout(() => {
+                this.broadcast({
+                    type: 'FORCE_BACK_TO_DASHBOARD',
+                    matchId: this.id
+                });
+            }, forceBackAfterMs);
+        }
     }
 }
 

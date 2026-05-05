@@ -1,16 +1,17 @@
 import React, { useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useGameSocket } from './hooks/useGameSocket'
 // This component is just for testing the WebSocket connection and send function
 function Conn() {
     const navigate = useNavigate()
+    const location = useLocation()
     const { connected, authenticated, currentMatch, send } = useGameSocket()
     // function to send a message to the server when button is clicked
     useEffect(() => {
-        if (currentMatch?.id) {
-            navigate(`/match/${currentMatch.id}`)
-        }
-    }, [currentMatch, navigate])
+        if (!currentMatch?.inProgress) return
+        if (location.pathname === `/match/${currentMatch.id}`) return
+        navigate(`/match/${currentMatch.id}`)
+    }, [currentMatch, location.pathname, navigate])
 
     function joinQueue() {
         if (!authenticated) {

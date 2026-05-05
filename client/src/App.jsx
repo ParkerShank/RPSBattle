@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import Register from './Register'
 import Login from './Login'
 import Dashboard from './Dashboard'
@@ -10,12 +10,15 @@ import { GameSocketProvider, useGameSocket } from './hooks/useGameSocket'
 function MatchRedirector() {
   const { currentMatch } = useGameSocket()
   const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
-    if (currentMatch?.id) {
-      navigate(`/match/${currentMatch.id}`)
-    }
-  }, [currentMatch, navigate])
+    if (!currentMatch?.id) return
+    if (currentMatch.inProgress !== true) return
+    if (location.pathname === `/match/${currentMatch.id}`) return
+
+    navigate(`/match/${currentMatch.id}`)
+  }, [currentMatch, location.pathname, navigate])
 
   return null
 }

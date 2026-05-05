@@ -130,18 +130,33 @@ function createLobby(ws1, ws2) {
 
 function startRound(match){
     if (match.round >= match.maxRounds){
-        match.inProgress = false;
-        match.broadcast({
-            type: 'MATCH_ENDED',
-            scores: match.scores
+        match.endMatch({
+            reason: 'completed',
+            onEnd: (endedMatch) => {
+                saveMatchToDatabase(endedMatch);
+                lobbies.delete(endedMatch.id);
+            }
         });
-        lobbies.delete(match.id);
         return;
     }
 
     match.startRound(({ play1, play2 }) => {
 
         match.evaluate(play1, play2);
+        const roundNumber = match.round + 1;
+        const winnerId = play1 === play2 ? null : (
+            (play1 === 'Rock' && play2 === 'Scissors') ||
+            (play1 === 'Scissors' && play2 === 'Paper') ||
+            (play1 === 'Paper' && play2 === 'Rock')
+        ) ? match.player1.id : match.player2.id;
+
+        match.roundHistory.push({
+            round_number: roundNumber,
+            player1_play: play1,
+            player2_play: play2,
+            winner_id: winnerId
+        });
+
         match.choices = {};
         match.round++;
 
@@ -159,6 +174,100 @@ function startRound(match){
 
         startRound(match);
     });
+}
+
+// Save completed match to database
+function saveMatchToDatabase(match) {
+  const player1Id = match.player1.id;
+  const player2Id = match.player2.id;
+  const player1Score = match.scores[player1Id];
+  const player2Score = match.scores[player2Id];
+  
+  let winnerId = null;
+  
+  if (player1Score > player2Score) {
+    winnerId = player1Id;
+  } else if (player2Score > player1Score) {
+    winnerId = player2Id;
+  }
+  // If equal, winnerId stays null (it's a tie)
+
+  console.log('[DB] Saving match:', { player1Id, player2Id, winnerId, scores: match.scores });
+
+  // Insert game record
+  db.query(
+    'INSERT INTO games (player1_id, player2_id, winner_id, finished_at) VALUES (?, ?, ?, NOW())',
+    [player1Id, player2Id, winnerId],
+    (err, result) => {
+      if (err) {
+        console.error('[DB] Failed to insert game:', err.message);
+        return;
+      }
+
+      const gameId = result.insertId;
+      console.log('[DB] Game inserted with ID:', gameId);
+
+      if (match.roundHistory?.length > 0) {
+        const roundValues = match.roundHistory.map((round) => [
+          gameId,
+          round.round_number,
+          round.player1_play,
+          round.player2_play,
+          round.winner_id,
+        ]);
+
+        db.query(
+          'INSERT INTO game_rounds (game_id, round_number, player1_play, player2_play, winner_id) VALUES ?',
+          [roundValues],
+          (roundErr) => {
+            if (roundErr) {
+              console.error('[DB] Failed to insert round history:', roundErr.message);
+            } else {
+              console.log('[DB] Round history saved for game:', gameId);
+            }
+          }
+        );
+      }
+
+      // Update player 1 stats
+      if (winnerId === player1Id) {
+        updatePlayerStats(player1Id, 'win');
+      } else if (winnerId === player2Id) {
+        updatePlayerStats(player1Id, 'loss');
+      } else {
+        updatePlayerStats(player1Id, 'tie');
+      }
+
+      // Update player 2 stats
+      if (winnerId === player2Id) {
+        updatePlayerStats(player2Id, 'win');
+      } else if (winnerId === player1Id) {
+        updatePlayerStats(player2Id, 'loss');
+      } else {
+        updatePlayerStats(player2Id, 'tie');
+      }
+    }
+  );
+}
+
+// Helper function to update player statistics
+function updatePlayerStats(userId, result) {
+  if (result === 'win') {
+    db.query('UPDATE users SET wins = wins + 1 WHERE id = ?', [userId], (err) => {
+      if (err) console.error('[DB] Failed to update wins for user', userId, ':', err.message);
+      else console.log('[DB] Updated wins for user:', userId);
+    });
+  } else if (result === 'loss') {
+    db.query('UPDATE users SET losses = losses + 1 WHERE id = ?', [userId], (err) => {
+      if (err) console.error('[DB] Failed to update losses for user', userId, ':', err.message);
+      else console.log('[DB] Updated losses for user:', userId);
+    });
+  } else if (result === 'tie') {
+    db.query('UPDATE users SET ties = ties + 1 WHERE id = ?', [userId], (err) => {
+      if (err) console.error('[DB] Failed to update ties for user', userId, ':', err.message);
+      else console.log('[DB] Updated ties for user:', userId);
+    });
+  }
 }
 
 //session are to only use websockets after login instead of websockets on connection. Easier to get all their data then attach it before making the new player
@@ -517,6 +626,49 @@ app.get('/api/history/:username', (req, res) => {
   );
 });
 
+// Get user's 15 most recent games with opponent details
+app.get('/api/user/:userId/recent-games', (req, res) => {
+  const { userId } = req.params;
+
+  db.query(
+    `SELECT 
+      g.id,
+      g.player1_id,
+      g.player2_id,
+      g.winner_id,
+      g.finished_at,
+      u1.username as player1_username,
+      u2.username as player2_username,
+      CASE 
+        WHEN g.winner_id = ? THEN 'win'
+        WHEN g.winner_id IS NULL THEN 'tie'
+        ELSE 'loss'
+      END as result
+     FROM games g
+     LEFT JOIN users u1 ON g.player1_id = u1.id
+     LEFT JOIN users u2 ON g.player2_id = u2.id
+     WHERE g.player1_id = ? OR g.player2_id = ?
+     ORDER BY g.finished_at DESC
+     LIMIT 15`,
+    [userId, userId, userId],
+    (err, results) => {
+      if (err) {
+        console.error('[DB] Failed to fetch recent games:', err.message);
+        return res.status(500).json({ message: err.message });
+      }
+      
+      // Add opponent name to each result
+      const games = results.map(game => ({
+        ...game,
+        opponent: game.player1_id === parseInt(userId) ? game.player2_username : game.player1_username,
+        opponentId: game.player1_id === parseInt(userId) ? game.player2_id : game.player1_id
+      }));
+      
+      res.json(games);
+    }
+  );
+});
+
 /*
 app.listen(3000, () => {
   console.log('Server running at http://localhost:3000');
@@ -640,17 +792,6 @@ wss.on('connection', (ws) => {
           scores: result.scores
         });
 
-        if (match.round >= match.maxRounds) {
-            match.inProgress = false;
-            match.broadcast({
-                type: 'MATCH_ENDED',
-                scores: match.scores
-            });
-        
-            lobbies.delete(match.id);
-            return;
-        }
-
         startRound(match);
 
         break;
@@ -693,8 +834,32 @@ wss.on('connection', (ws) => {
         if (index !== -1) {
           queue.splice(index, 1);
         }
-        // ws.send(JSON.stringify({type:'LEFT_QUEUE'}));
-        safeSend(ws, {type: 'MATCH_ENDED'});
+        safeSend(ws, { type: 'LEFT_QUEUE' });
+        break;
+      }
+      case 'LEAVE_MATCH': {
+        if (!player.lobbyID) {
+          sendError(ws, 'You are not currently in a match.');
+          break;
+        }
+
+        const match = lobbies.get(player.lobbyID);
+        if (!match) {
+          sendError(ws, 'Match not found or already ended.');
+          break;
+        }
+
+        const opponent = match.player1.id === player.id ? match.player2 : match.player1;
+        match.endMatch({
+          reason: 'player_left',
+          forceWinnerId: opponent.id,
+          onEnd: (endedMatch) => {
+            saveMatchToDatabase(endedMatch);
+            lobbies.delete(endedMatch.id);
+          },
+          forceBackAfterMs: 0
+        });
+
         break;
       }
       default: {
@@ -718,11 +883,18 @@ wss.on('connection', (ws) => {
         const lobby = lobbies.get(player.lobbyID);
         if (lobby) {
           const opponentWs = lobby.player1.ws === ws ? lobby.player2.ws : lobby.player1.ws;
-          opponentWs?.send(JSON.stringify({ type: 'OPPONENT_DISCONNECTED' }));
-          // Clean up lobby and reset opponent's lobbyId
           const opponent = players.get(opponentWs);
-          if (opponent) opponent.lobbyID = null;
-          lobbies.delete(player.lobbyID);
+          lobby.endMatch({
+            reason: 'opponent_disconnected',
+            forceWinnerId: opponent?.id ?? null,
+            onEnd: (endedMatch) => {
+              saveMatchToDatabase(endedMatch);
+              lobbies.delete(endedMatch.id);
+            }
+          });
+          if (opponentWs?.readyState === 1) {
+            opponentWs.send(JSON.stringify({ type: 'OPPONENT_DISCONNECTED' }));
+          }
         }
       }
 

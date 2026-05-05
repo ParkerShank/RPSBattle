@@ -1,30 +1,27 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useGameSocket } from './hooks/useGameSocket'
 
 function Match() {
   const navigate = useNavigate()
   const { matchId } = useParams()
-  const { authenticated, currentMatch, matchStatus, roundResult, send } = useGameSocket()
+  const { authenticated, currentMatch, matchStatus, roundResult, send, resetCurrentMatch, forceBack } = useGameSocket()
   const [selectedPlay, setSelectedPlay] = useState(null)
 
   // -Timer Code-
   const [timeLeft, setTimeLeft] = useState({seconds: 0, deciseconds: 0});
-  const timerDuration = 3000; // ms
+  const timerDuration = 5000; // ms
+  const endTimeRef = useRef(null)
 
   useEffect(() => {
     if (!currentMatch?.inProgress) {
-      setTimeLeft({seconds: 0, deciseconds: 0});
       return;
     }
 
-    setSelectedPlay(null);
-    setTimeLeft({seconds: Math.floor(timerDuration / 1000), deciseconds: 0});
-
-    const endTime = Date.now() + timerDuration;
+    endTimeRef.current = Date.now() + timerDuration;
 
     const interval = setInterval(() => {
-        const remaining = endTime - Date.now();
+        const remaining = endTimeRef.current - Date.now();
 
         if (remaining <= 0) {
             setTimeLeft({seconds: 0, deciseconds: 0});
@@ -42,6 +39,17 @@ function Match() {
   }, [currentMatch?.inProgress, currentMatch?.round]);
   // -Timer Code End-
 
+  const match = currentMatch && `${currentMatch.id}` === matchId ? currentMatch : null
+  const playerScore = match ? match.scores?.[match.playerId] ?? 0 : 0
+  const opponentScore = match ? match.scores?.[match.opponent?.id] ?? 0 : 0
+  const matchResultMessage = match?.resultMessage || matchStatus
+
+  useEffect(() => {
+    if (forceBack) {
+      navigate('/dashboard')
+    }
+  }, [forceBack, navigate])
+
   if (!authenticated) {
     return (
       <div>
@@ -52,20 +60,24 @@ function Match() {
     )
   }
 
-  const match = currentMatch && `${currentMatch.id}` === matchId ? currentMatch : null
-  const playerScore = match ? match.scores?.[match.playerId] ?? 0 : 0
-  const opponentScore = match ? match.scores?.[match.opponent?.id] ?? 0 : 0
-
   function handlePlay(play) {
     setSelectedPlay(play)
     send({ type: 'PLAY', play })
+  }
+
+  function handleLeaveMatch() {
+    if (match?.inProgress) {
+      send({ type: 'LEAVE_MATCH' })
+    }
+    resetCurrentMatch()
+    navigate('/dashboard')
   }
 
   return (
     <div>
       <h1>Match {matchId}</h1>
       <div>
-        {`${timeLeft.seconds}:${timeLeft.deciseconds.toString().padStart(1, "0")}`}
+        {currentMatch?.inProgress ? `${timeLeft.seconds}:${timeLeft.deciseconds.toString().padStart(1, "0")}` : '0:0'}
       </div>
       {match ? (
         <>
@@ -77,13 +89,15 @@ function Match() {
             <div>You: {playerScore ?? 0}</div>
             <div>{match.opponent?.name || 'Opponent'}: {opponentScore ?? 0}</div>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-            {['Rock', 'Paper', 'Scissors'].map((play) => (
-              <button key={play} type="button" onClick={() => handlePlay(play)}>
-                {play}
-              </button>
-            ))}
-          </div>
+          {match.inProgress && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              {['Rock', 'Paper', 'Scissors'].map((play) => (
+                <button key={play} type="button" onClick={() => handlePlay(play)}>
+                  {play}
+                </button>
+              ))}
+            </div>
+          )}
           <div>
             {selectedPlay ? <p>You played: {selectedPlay}</p> : <p>Choose your play.</p>}
             {matchStatus && <p><em>{matchStatus}</em></p>}
@@ -96,9 +110,33 @@ function Match() {
               </div>
             )}
           </div>
-          <div style={{ marginTop: '1rem' }}>
-            <button type="button" onClick={() => navigate('/dashboard')}>Back to Dashboard</button>
-          </div>
+          {match && !match.inProgress && (
+            <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#e8f5e9', borderRadius: '4px' }}>
+              <h3>Match Complete!</h3>
+              <p><strong>Final Scores:</strong></p>
+              <p>You: {playerScore}</p>
+              <p>{match.opponent?.name || 'Opponent'}: {opponentScore}</p>
+              <p style={{ marginTop: '1rem' }}>{matchResultMessage || (playerScore > opponentScore ? '🎉 You Won! 🎉' : playerScore < opponentScore ? 'Better luck next time!' : "It's a Tie!")}</p>
+              <button
+                type="button"
+                onClick={handleLeaveMatch}
+                style={{ marginTop: '1rem', padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          )}
+          {match?.inProgress && (
+            <div style={{ marginTop: '1rem' }}>
+              <button
+                type="button"
+                onClick={handleLeaveMatch}
+                style={{ padding: '10px 20px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                Dashboard
+              </button>
+            </div>
+          )}
         </>
       ) : (
         <>
