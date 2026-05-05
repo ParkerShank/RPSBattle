@@ -10,7 +10,7 @@ function Login() {
 
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
-  const { setAuthToken } = useGameSocket();
+  const { setAuthToken, authenticated } = useGameSocket();
 
   const handleChange = (e) => {
     setFormData({
@@ -46,57 +46,64 @@ function Login() {
     }
   };
 
-  return (
-    <div style={{ padding: '30px', fontFamily: 'Arial' }}>
-      <h1>Login</h1>
+  const statusClass = message
+    ? message.toLowerCase().includes('success')
+      ? 'status status-success'
+      : 'status status-error'
+    : 'status status-muted';
 
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Username: </label>
+  return (
+    <main className="page">
+      <section className="panel center">
+        <h1>Menu</h1>
+        <p className="subtitle">Sign in and jump into real-time matches.</p>
+
+        <form className="form-grid" onSubmit={handleSubmit}>
+          <label htmlFor="username">Username</label>
           <input
+            id="username"
+            className="input"
             type="text"
             name="username"
             value={formData.username}
             onChange={handleChange}
+            autoComplete="username"
             required
           />
-        </div>
 
-        <br />
-
-        <div>
-          <label>Password: </label>
+          <label htmlFor="password">Password</label>
           <input
+            id="password"
+            className="input"
             type="password"
             name="password"
             value={formData.password}
             onChange={handleChange}
+            autoComplete="current-password"
             required
           />
+
+          <button className="btn btn-primary" type="submit">Login</button>
+        </form>
+
+        <p className={statusClass}>{message || 'Use your account credentials to continue.'}</p>
+
+        <p style={{ marginTop: '0.85rem' }}>
+          Don&apos;t have an account? <Link to="/register">Create one</Link>
+        </p>
+
+        <div className="menu">
+          {authenticated ? (
+            <>
+              <Link className="btn btn-secondary" to="/testing">Queue</Link>
+              <Link className="btn btn-secondary" to="/dashboard">Dashboard</Link>
+            </>
+          ) : (
+            <Link className="btn btn-secondary" to="/register">Register</Link>
+          )}
         </div>
-
-        <br />
-
-        <button type="submit">Login</button>
-      </form>
-
-      <p>{message}</p>
-
-      <p>
-        Don't have an account? <Link to="/register">Register here</Link>
-      </p>
-      <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-        <Link to="/testing">
-          <button type="button">Testing</button>
-        </Link>
-        <Link to="/register">
-          <button type="button">Register</button>
-        </Link>
-        <Link to="/dashboard">
-          <button type="button">Dashboard</button>
-        </Link>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 

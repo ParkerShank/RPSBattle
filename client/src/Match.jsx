@@ -52,11 +52,15 @@ function Match() {
 
   if (!authenticated) {
     return (
-      <div>
-        <h1>Match</h1>
-        <p>You must be logged in to view a match.</p>
-        <Link to="/">Go to Login</Link>
-      </div>
+      <main className="page">
+        <section className="panel center">
+          <h1>Match</h1>
+          <p className="status status-error">You must be logged in to view a match.</p>
+          <div className="menu">
+            <Link className="btn btn-secondary" to="/">Go to Login</Link>
+          </div>
+        </section>
+      </main>
     )
   }
 
