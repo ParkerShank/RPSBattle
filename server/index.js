@@ -1,5 +1,7 @@
 // This is the main server file for the Rock-Paper-Scissors game. It handles user registration, login, matchmaking, and real-time communication using WebSockets. The server uses Express for handling HTTP requests and MySQL for storing user data. WebSocket connections are used for real-time gameplay interactions between matched players.
-require('dotenv').config();
+const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
+require('dotenv').config({ path: envFile });
+console.log('[CONFIG] Loaded env file:', envFile);
 const express = require('express');
 const http = require('http');
 const mysql = require('mysql2');
@@ -282,15 +284,20 @@ const db = mysql.createConnection({
   host: process.env.DB_HOST || 'rpsbattle-db.cv646gg8wjqx.us-east-2.rds.amazonaws.com',
   user: process.env.DB_USER || 'admin',
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME || 'RPS_DB'
+  database: process.env.DB_NAME || 'RPS_DB',
+  connectTimeout: 10000
+});
+
+db.on('error', (err) => {
+  console.error('[DB] Connection error:', err.code || err.message || err);
 });
 
 db.connect((err) => {
   if (err) {
-    console.error('Database connection failed:', err.message);
+    console.error('[DB] Database connection failed:', err.message);
     return;
   }
-  console.log('Connected to MySQL');
+  console.log('[DB] Connected to MySQL');
   ensureUserSchema();
 });
 
