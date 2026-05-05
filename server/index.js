@@ -279,10 +279,10 @@ function createSession(player) {
 }
 
 const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
+  host: 'rpsbattle-db.cv646gg8wjqx.us-east-2.rds.amazonaws.com',
+  user: 'admin',
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
+  database: 'RPS_DB'
 });
 
 db.connect((err) => {
