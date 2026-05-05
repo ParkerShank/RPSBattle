@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Dependencies
 node_modules/
 
@@ -16,3 +17,15 @@ npm-debug.log*
 # Build output
 dist/
 dist-ssr/
+=======
+# Ignore local environment files
+server/.env
+
+# Node dependencies
+node_modules
+
+# OS and editor temporary files
+.DS_Store
+.vscode/
+.idea/
+>>>>>>> fbb63cb22d0ba96fea256fa625a441b1ef5a7a66
